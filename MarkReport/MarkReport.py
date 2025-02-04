@@ -48,19 +48,7 @@ os.makedirs(tmp_dir, exist_ok=True)
 # Headless browser
 
 if not args.basic:
-    from selenium import webdriver
-    from selenium.webdriver.firefox.options import Options
-    from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-
-    options = Options()
-    options.headless = True
-    options.log.level = "trace"
-
-    d = DesiredCapabilities.FIREFOX
-    d['loggingPrefs'] = { 'browser':'ALL' }
-
-    driver = webdriver.Firefox(options=options,capabilities=d)
-    driver.set_page_load_timeout(args.timeout)
+    from playwright.sync_api import sync_playwright
 
 prev_compile_time = 0
 def recompile(notifier):
@@ -75,52 +63,110 @@ def recompile(notifier):
         stdout.write("\rBuilding the PDF file...")
         stdout.flush()
 
-    files = glob.glob(tmp_dir + '/*.md')
-    for f in files:
-        os.remove(f)
+    try:
+        # Limpar arquivos temporários
+        files = glob.glob(tmp_dir + '/*.md')
+        for f in files:
+            os.remove(f)
 
-    copyfile(script_path + "/base.html", tmp_dir + "/base.html")
-    if not os.path.islink(tmp_dir + "/src"):
-        os.symlink(script_path + "/src", tmp_dir + "/src")
-    copy_tree(".", tmp_dir)
+        # Debug: mostrar diretório de trabalho atual
+        if not args.quiet:
+            stdout.write(f"\rCurrent working directory: {os.getcwd()}\n")
+            stdout.flush()
 
-    # Base HTML Template
+        # Preparar arquivos
+        copyfile(script_path + "/base.html", tmp_dir + "/base.html")
+        if not os.path.islink(tmp_dir + "/src"):
+            os.symlink(script_path + "/src", tmp_dir + "/src")
+        copy_tree(".", tmp_dir)
 
-    base_html = ""
-    with open(tmp_dir + "base.html", "r") as base_html_file:
-        base_html = base_html_file.read()
+        # Markdown parsing
+        subprocess.check_output(script_path + "/md-parsing " + tmp_dir, shell=True)
+        html_file_name = tmp_dir + "output.html"
 
-    # Markdown parsing
+        # Interpret JS code
+        if not args.basic:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                page = browser.new_page()
+                page.goto("file://" + os.path.abspath(html_file_name))
+                page.wait_for_load_state('networkidle')
+                interpreted_html = page.content()
+                browser.close()
 
-    subprocess.check_output(script_path + "/md-parsing " + tmp_dir, shell=True)
-    html_file_name = tmp_dir + "output.html"
+                with open(html_file_name, "w") as html_out_file:
+                    html_out_file.write(interpreted_html)
 
-    # Interpret JS code
+        # Create final PDF file
+        pdf = HTML(html_file_name).write_pdf()
+        
+        # Usar caminho absoluto para o diretório output
+        output_dir = os.path.abspath('/app/output')  # Garantir caminho absoluto
+        output_path = os.path.join(output_dir, 'output.pdf')
+        
+        # Debug: mostrar caminhos e permissões
+        if not args.quiet:
+            stdout.write(f"\rOutput dir: {output_dir}\n")
+            stdout.write(f"\rOutput path: {output_path}\n")
+            stdout.write(f"\rDirectory exists: {os.path.exists(output_dir)}\n")
+            if os.path.exists(output_dir):
+                stdout.write(f"\rDirectory permissions: {oct(os.stat(output_dir).st_mode)[-3:]}\n")
+            stdout.write(f"\rDirectory listing:\n")
+            stdout.write(subprocess.check_output(['ls', '-la', '/app']).decode())
+            stdout.flush()
+        
+        # Criar diretório output se não existir
+        os.makedirs(output_dir, exist_ok=True)
+        os.chmod(output_dir, 0o777)  # Garantir permissões totais
+        
+        # Debug: verificar após criar diretório
+        if not args.quiet:
+            stdout.write(f"\rAfter mkdir - Directory exists: {os.path.exists(output_dir)}\n")
+            stdout.write(f"\rAfter mkdir - Permissions: {oct(os.stat(output_dir).st_mode)[-3:]}\n")
+            stdout.flush()
+        
+        # Tentar salvar o arquivo várias vezes se necessário
+        max_retries = 3
+        retry_delay = 1  # segundos
+        
+        for attempt in range(max_retries):
+            try:
+                # Debug: tentar criar arquivo vazio primeiro
+                with open(output_path, 'wb') as f:
+                    f.write(pdf)
+                if not args.quiet:
+                    stdout.write(f"\rFile created successfully\n")
+                    stdout.flush()
+                break
+            except FileNotFoundError as e:
+                if not args.quiet:
+                    stdout.write(f"\rAttempt {attempt + 1}: Error - {str(e)}\n")
+                    stdout.write(f"\rTrying to create directory again...\n")
+                    stdout.flush()
+                os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                if attempt == max_retries - 1:
+                    raise
+                sleep(retry_delay)
+                continue
+            except Exception as e:
+                if not args.quiet:
+                    stderr.write(f"\rUnexpected error: {str(e)}\n")
+                    stderr.flush()
+                raise
 
-    if not args.basic:
-        driver.get("file:///" + html_file_name)
-        sleep(2)
-        elem = driver.find_element_by_xpath("//*")
-        interpreted_html = elem.get_attribute("outerHTML")
+        if not args.quiet:
+            stdout.write("\rDone.                   \n")
+            stdout.flush()
 
-        with open(html_file_name, "w") as html_out_file:
-            html_out_file.write(interpreted_html)
-
-    # Create final PDF file
-
-    pdf = HTML(html_file_name).write_pdf()
-    f = open("output.pdf",'wb')
-    f.write(pdf)
-
-    if not args.quiet:
-        stdout.write("\rDone.                   ")
-        stdout.flush()
+    except Exception as e:
+        if not args.quiet:
+            stderr.write(f"\rError: {str(e)}\n")
+            stderr.flush()
+        return
 
 recompile(None)
 
 if not args.watch:
-    if not args.basic:
-        driver.quit()
     exit(0)
 
 import pyinotify
@@ -131,5 +177,4 @@ event_notifier = pyinotify.Notifier(watch_manager, recompile)
 watch_manager.add_watch(os.path.abspath("."), pyinotify.ALL_EVENTS, rec=True)
 event_notifier.loop()
 
-if not args.basic:
-        driver.quit()
+exit(0)

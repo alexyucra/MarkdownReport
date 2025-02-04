@@ -1,37 +1,37 @@
-# MarkReport
+# MarkdownReport
 
-This little script seamlessly converts Markdown to elegant PDF reports.
+Este pequeno script converte Markdown perfeitamente em elegantes relatórios em PDF.
 
 ![](doc/cover.png)
 
-* Configurable report layout
-* Automatic Table Of Content
-* LaTeX equations
-* Syntax highlighting
-* Resizable images
+* Layout de relatório configurável
+* Índice automático
+* Equações LaTeX
+* Destaque de sintaxe
+* Imagens redimensionáveis
 
-## How does it work?
+## Como funciona?
 
-_MarkReport_ takes a markdown file, converts it to HTML (using Go's excellent [blackfriday](https://github.com/russross/blackfriday) package), renders LaTeX equations and code highlighting with JavaScript thanks to [Selenium](https://github.com/SeleniumHQ/selenium) and finally converts the enriched HTML to PDF thanks to [WeasyPrint](https://weasyprint.org/).
+_MarkReport_ pega um arquivo markdown, converte-o em HTML (usando o excelente pacote [blackfriday](https://github.com/russross/blackfriday) do Go), renderiza equações LaTeX e realce de código com JavaScript graças ao [Selenium](https:/ /github.com/SeleniumHQ/selenium) e finalmente converte o HTML enriquecido em PDF graças ao [WeasyPrint](https://weasyprint.org/).
 
-## How to use it?
+## Como usar?
 
-Just type in your document as a Markdown `.md` file, using special syntax in comments to tell MarkReport how exactly the final PDF should be structured.
+Basta digitar seu documento como um arquivo Markdown `.md`, usando sintaxe especial nos comentários para informar ao MarkReport como exatamente o PDF final deve ser estruturado.
 
-You may also split your document into several Markdown files, by specifying the order in which to compile these files in a `content.txt` in the main folder.
+Você também pode dividir seu documento em vários arquivos Markdown, especificando a ordem na qual esses arquivos serão compilados em um `content.txt` na pasta principal.
 
-For instance :
+Por exemplo :
 
-    body.md
-    conclusion.md
-    content.txt
-    intro.md
+    corpo.md
+    conclusão.md
+    conteúdo.txt
+    introdução.md
 
-With `content.txt` :
+Com `content.txt`:
 
-    intro
-    body
-    conclusion
+    introdução
+    corpo
+    conclusão
 
 ### Simple example
 
@@ -53,12 +53,12 @@ Nunc lobortis pharetra erat, id rutrum lorem malesuada in.
 <!-- !section -->
 ```
 
-Open the folder in which the Markdown file above is located. Then run _MarkReport_:
+Abra a pasta onde o arquivo Markdown acima está localizado. Em seguida, execute _MarkReport_:
 
-    cd /path/to/markdown/file
-    /path/to/MarkReport/MarkReport.py
+> cd /caminho/para/markdown/arquivo
+> /caminho/para/MarkReport/MarkReport.py
 
-The build process completes after a few seconds, and a `output.pdf` file appears in the folder.
+O processo de construção é concluído após alguns segundos e um arquivo `output.pdf` aparece na pasta.
 
 ![](doc/markreport-example.png)
 
@@ -165,12 +165,12 @@ List of paragraphs with their content indented:
     <!-- !specs -->
 
 
-### Available command line flags
+### Sinalizadores de linha de comando disponíveis
 
-* `--basic` Javascript interpreter is disabled, allowing faster builds but without syntax highlighting or LaTeX support
-* `--watch` The _MarkReport_ script will not stop after the first build, but stay idle and will rebuild t
-as soon as a change is made in the current folder, allowing for faster hot-builds
-* `--quiet` No output will be displayed during the build process
+- `--basic` O interpretador Javascript está desabilitado, permitindo compilações mais rápidas, mas sem realce de sintaxe ou suporte a LaTeX
+- `--watch` O script _MarkReport_ não irá parar após a primeira compilação, mas permanecerá inativo e reconstruirá t
+assim que uma alteração for feita na pasta atual, permitindo compilações a quente mais rápidas
+- `--quiet` Nenhuma saída será exibida durante o processo de construção
 
 ## Installation instructions
 
@@ -193,3 +193,66 @@ The firefox driver is used to interpret JavaScript inside the HTML page generate
     sudo mv geckodriver /usr/local/bin/
 
 You're now ready to go.
+
+## Add Dockerfile to run in container
+
+
+- build dockerfile
+
+> docker rm -f relatorio
+
+> docker build --no-cache -t relatorio:v1.0 . 
+
+> docker build --no-cache --progress=plain -t relatorio:v1.0 .
+
+> docker run -it --name relatorio relatorio:v1.0
+
+## accesando ao docker
+
+> docker run -it --name relatorio relatorio:v1.0
+
+> docker exec -it relatorio bash
+
+## docker compose
+
+> docker compose up -d
+
+> docker compose down
+
+> docker compose build
+
+## comandos docker
+
+```shell
+docker exec -it relatorio:v1.0 bash -c "cd /caminho/para/markdown/arquivo && /caminho/para/MarkReport/MarkReport.py"
+
+```
+
+# Arquitetura de pastas
+
+```
+MarkReport\
+├── Dockerfile
+├── docker-compose.yml
+├── README.md
+└── MarkReport\
+    ├── MarkReport.py
+    ├── md-parsing.go
+    └── base.html
+```
+
+## teste 
+
+```shell
+# Entrar no container
+docker-compose exec relatorio bash
+
+# Dentro do container
+cd /app/input
+python3 /app/MarkReport/MarkReport.py
+
+# ou
+docker-compose exec markreport sh -c "cd /app/input && python3 /app/MarkReport/MarkReport.py"
+
+docker-compose logs -f
+```

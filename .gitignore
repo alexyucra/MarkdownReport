@@ -5,3 +5,5 @@ build
 *.egg-info
 geckodriver.log
 md-parsing
+/input
+/output

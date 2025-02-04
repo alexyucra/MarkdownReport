@@ -1,0 +1,45 @@
+# version: '3.8'
+
+services:
+  markreport:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: relatorio:v1.0
+    container_name: relatorio
+    volumes:
+      # Volume para os arquivos markdown de entrada
+      - ./input:/app/input
+      # Volume para os relatórios gerados
+      - ./output:/app/output
+      # Volume para cache do Chrome/Playwright
+      - /dev/shm:/dev/shm
+      # Adicionar volume para exemplo
+      - ./example:/app/example
+    environment:
+      # Variáveis de ambiente para melhor output
+      - PYTHONUNBUFFERED=1
+      - DEBUG=1
+    working_dir: /app/input
+    command: >
+      sh -c "mkdir -p /app/output &&
+             chmod -R 777 /app/output &&
+             chown -R root:root /app/output &&
+             ls -la /app &&
+             ls -la /app/output &&
+             python3 /app/MarkReport/MarkReport.py --watch"
+    # Manter o container rodando e interativo
+    tty: true
+    stdin_open: true
+    # Reiniciar apenas se parar manualmente
+    restart: unless-stopped
+    # Recursos e segurança
+    shm_size: '1gb'
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
+
+networks:
+  default:
+    name: markreport_network
